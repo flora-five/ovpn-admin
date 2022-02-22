@@ -404,7 +404,9 @@ func main() {
 
 	for _, mgmtInterface := range *mgmtAddress {
 		parts := strings.SplitN(mgmtInterface, "=", 2)
-		ovpnAdmin.mgmtInterfaces[parts[0]] = parts[len(parts)-1]
+		if parts[0] != "" && parts[1] != "" {
+			ovpnAdmin.mgmtInterfaces[parts[0]] = parts[len(parts)-1]
+		}
 	}
 
 	ovpnAdmin.registerMetrics()
@@ -1036,7 +1038,11 @@ func (oAdmin *OvpnAdmin) mgmtConnectedUsersParser(text, serverName string) []cli
 }
 
 func (oAdmin *OvpnAdmin) mgmtKillUserConnection(username, serverName string) {
-	conn, err := net.Dial("tcp", oAdmin.mgmtInterfaces[serverName])
+	addr := oAdmin.mgmtInterfaces[serverName]
+	if addr == "" {
+		return
+	}
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		log.Printf("WARNING: openvpn mgmt interface for %s is not reachable by addr %s\n", serverName, oAdmin.mgmtInterfaces[serverName])
 		return
