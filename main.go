@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	usernameRegexp       = `^([a-zA-Z0-9_.-@])+$`
+	usernameRegexp       = `^([a-zA-Z0-9_.-@ ])+$`
 	passwordRegexp       = `^([a-zA-Z0-9_.-@])+$`
 	passwordMinLength    = 6
 	downloadCertsApiUrl  = "/api/data/certs/download"
@@ -733,7 +733,7 @@ func (oAdmin *OvpnAdmin) getCcd(username string) Ccd {
 }
 
 func checkStaticAddressIsFree(staticAddress string, username string) bool {
-	o := runBash(fmt.Sprintf("grep -rl ' %s ' %s | grep -vx %s/%s | wc -l", staticAddress, *ccdDir, *ccdDir, username))
+	o := runBash(fmt.Sprintf("grep -rl ' %s ' %s | grep -vx '%s/%s' | wc -l", staticAddress, *ccdDir, *ccdDir, username))
 
 	if strings.TrimSpace(o) == "0" {
 		return true
@@ -852,11 +852,11 @@ func (oAdmin *OvpnAdmin) userCreate(username, password string) (bool, string) {
 		}
 	}
 
-	o := runBash(fmt.Sprintf("date +%%Y-%%m-%%d\\ %%H:%%M:%%S && cd %s && easyrsa build-client-full %s nopass", *easyrsaDirPath, username))
+	o := runBash(fmt.Sprintf("date +%%Y-%%m-%%d\\ %%H:%%M:%%S && cd %s && easyrsa build-client-full '%s' nopass", *easyrsaDirPath, username))
 	log.Println(o)
 
 	if *authByPassword {
-		o = runBash(fmt.Sprintf("openvpn-user create --db.path %s --user %s --password %s", *authDatabase, username, password))
+		o = runBash(fmt.Sprintf("openvpn-user create --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
 		log.Println(o)
 	}
 
@@ -872,7 +872,7 @@ func (oAdmin *OvpnAdmin) userCreate(username, password string) (bool, string) {
 func (oAdmin *OvpnAdmin) userChangePassword(username, password string) (bool, string) {
 
 	if checkUserExist(username) {
-		o := runBash(fmt.Sprintf("openvpn-user check --db.path %s --user %s | grep %s | wc -l", *authDatabase, username, username))
+		o := runBash(fmt.Sprintf("openvpn-user check --db.path %s --user '%s' | grep '%s' | wc -l", *authDatabase, username, username))
 		log.Println(o)
 
 		if !validatePassword(password) {
@@ -885,11 +885,11 @@ func (oAdmin *OvpnAdmin) userChangePassword(username, password string) (bool, st
 
 		if strings.TrimSpace(o) == "0" {
 			log.Println("Creating user in users.db")
-			o = runBash(fmt.Sprintf("openvpn-user create --db.path %s --user %s --password %s", *authDatabase, username, password))
+			o = runBash(fmt.Sprintf("openvpn-user create --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
 			log.Println(o)
 		}
 
-		o = runBash(fmt.Sprintf("openvpn-user change-password --db.path %s --user %s --password %s", *authDatabase, username, password))
+		o = runBash(fmt.Sprintf("openvpn-user change-password --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
 		log.Println(o)
 
 		if *verbose {
@@ -913,9 +913,9 @@ func (oAdmin *OvpnAdmin) getUserStatistic(username string) clientStatus {
 func (oAdmin *OvpnAdmin) userRevoke(username string) string {
 	if checkUserExist(username) {
 		// check certificate valid flag 'V'
-		o := runBash(fmt.Sprintf("date +%%Y-%%m-%%d\\ %%H:%%M:%%S && cd %s && echo yes | easyrsa revoke %s && easyrsa gen-crl", *easyrsaDirPath, username))
+		o := runBash(fmt.Sprintf("date +%%Y-%%m-%%d\\ %%H:%%M:%%S && cd %s && echo yes | easyrsa revoke '%s' && easyrsa gen-crl", *easyrsaDirPath, username))
 		if *authByPassword {
-			o = runBash(fmt.Sprintf("openvpn-user revoke --db-path %s --user %s", *authDatabase, username))
+			o = runBash(fmt.Sprintf("openvpn-user revoke --db-path %s --user '%s'", *authDatabase, username))
 			//fmt.Println(o)
 		}
 
@@ -941,20 +941,20 @@ func (oAdmin *OvpnAdmin) userUnrevoke(username string) string {
 				if usersFromIndexTxt[i].Flag == "R" {
 					usersFromIndexTxt[i].Flag = "V"
 					usersFromIndexTxt[i].RevocationDate = ""
-					o := runBash(fmt.Sprintf("cd %s && cp pki/revoked/certs_by_serial/%s.crt pki/issued/%s.crt", *easyrsaDirPath, usersFromIndexTxt[i].SerialNumber, username))
+					o := runBash(fmt.Sprintf("cd %s && cp pki/revoked/certs_by_serial/%s.crt 'pki/issued/%s.crt'", *easyrsaDirPath, usersFromIndexTxt[i].SerialNumber, username))
 					//fmt.Println(o)
 					o = runBash(fmt.Sprintf("cd %s && cp pki/revoked/certs_by_serial/%s.crt pki/certs_by_serial/%s.pem", *easyrsaDirPath, usersFromIndexTxt[i].SerialNumber, usersFromIndexTxt[i].SerialNumber))
 					//fmt.Println(o)
-					o = runBash(fmt.Sprintf("cd %s && cp pki/revoked/private_by_serial/%s.key pki/private/%s.key", *easyrsaDirPath, usersFromIndexTxt[i].SerialNumber, username))
+					o = runBash(fmt.Sprintf("cd %s && cp pki/revoked/private_by_serial/%s.key 'pki/private/%s.key'", *easyrsaDirPath, usersFromIndexTxt[i].SerialNumber, username))
 					//fmt.Println(o)
-					o = runBash(fmt.Sprintf("cd %s && cp pki/revoked/reqs_by_serial/%s.req pki/reqs/%s.req", *easyrsaDirPath, usersFromIndexTxt[i].SerialNumber, username))
+					o = runBash(fmt.Sprintf("cd %s && cp pki/revoked/reqs_by_serial/%s.req 'pki/reqs/%s.req'", *easyrsaDirPath, usersFromIndexTxt[i].SerialNumber, username))
 					//fmt.Println(o)
 					fWrite(*indexTxtPath, renderIndexTxt(usersFromIndexTxt))
 					//fmt.Print(renderIndexTxt(usersFromIndexTxt))
 					o = runBash(fmt.Sprintf("cd %s && easyrsa gen-crl", *easyrsaDirPath))
 					//fmt.Println(o)
 					if *authByPassword {
-						o = runBash(fmt.Sprintf("openvpn-user restore --db-path %s --user %s", *authDatabase, username))
+						o = runBash(fmt.Sprintf("openvpn-user restore --db-path %s --user '%s'", *authDatabase, username))
 						//fmt.Println(o)
 					}
 					crlFix()
