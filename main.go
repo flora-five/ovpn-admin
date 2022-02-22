@@ -72,6 +72,9 @@ var (
 	certsArchivePath         = "/tmp/" + certsArchiveFileName
 	ccdArchivePath           = "/tmp/" + ccdArchiveFileName
 
+	// Extract CN from DN
+	indexCNRegexp            = regexp.MustCompile(`/?CN=([^/]+)`)
+
 	version = "1.7.5"
 )
 
@@ -520,7 +523,12 @@ func indexTxtParser(txt string) []indexTxtLine {
 			switch {
 			// case strings.HasPrefix(str[0], "E"):
 			case strings.HasPrefix(str[0], "R") || strings.HasPrefix(str[0], "V"):
-				indexTxt = append(indexTxt, indexTxtLine{Flag: str[0], ExpirationDate: str[1], RevocationDate: str[2], SerialNumber: str[3], Filename: str[4], DistinguishedName: str[5], Identity: str[5][strings.Index(str[5], "=")+1:]})
+				cnMatch := indexCNRegexp.FindStringSubmatch(str[5])
+				if len(cnMatch) < 2 {
+					log.Printf("ERROR: cannot extract CN from index line: %s\n", v)
+				} else {
+					indexTxt = append(indexTxt, indexTxtLine{Flag: str[0], ExpirationDate: str[1], RevocationDate: str[2], SerialNumber: str[3], Filename: str[4], DistinguishedName: str[5], Identity: cnMatch[1]})
+				}
 			}
 		}
 	}
@@ -748,7 +756,7 @@ func validatePassword(password string) bool {
 
 func checkUserExist(username string) bool {
 	for _, u := range indexTxtParser(fRead(*indexTxtPath)) {
-		if u.DistinguishedName == ("/CN=" + username) {
+		if u.Identity == username {
 			return true
 		}
 	}
@@ -929,7 +937,7 @@ func (oAdmin *OvpnAdmin) userUnrevoke(username string) string {
 		// check certificate revoked flag 'R'
 		usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
 		for i := range usersFromIndexTxt {
-			if usersFromIndexTxt[i].DistinguishedName == ("/CN=" + username) {
+			if usersFromIndexTxt[i].Identity == username {
 				if usersFromIndexTxt[i].Flag == "R" {
 					usersFromIndexTxt[i].Flag = "V"
 					usersFromIndexTxt[i].RevocationDate = ""
