@@ -639,9 +639,7 @@ func indexTxtParser(txt string) []indexTxtLine {
 		if len(str) > 0 {
 			switch {
 			// case strings.HasPrefix(str[0], "E"):
-			case strings.HasPrefix(str[0], "V"):
-				indexTxt = append(indexTxt, indexTxtLine{Flag: str[0], ExpirationDate: str[1], SerialNumber: str[2], Filename: str[3], DistinguishedName: str[4], Identity: str[4][strings.Index(str[4], "=")+1:]})
-			case strings.HasPrefix(str[0], "R"):
+			case strings.HasPrefix(str[0], "R") || strings.HasPrefix(str[0], "V"):
 				indexTxt = append(indexTxt, indexTxtLine{Flag: str[0], ExpirationDate: str[1], RevocationDate: str[2], SerialNumber: str[3], Filename: str[4], DistinguishedName: str[5], Identity: str[5][strings.Index(str[5], "=")+1:]})
 			}
 		}
@@ -654,9 +652,7 @@ func renderIndexTxt(data []indexTxtLine) string {
 	indexTxt := ""
 	for _, line := range data {
 		switch {
-		case line.Flag == "V":
-			indexTxt += fmt.Sprintf("%s\t%s\t\t%s\t%s\t%s\n", line.Flag, line.ExpirationDate, line.SerialNumber, line.Filename, line.DistinguishedName)
-		case line.Flag == "R":
+		case line.Flag == "R" || line.Flag == "V":
 			indexTxt += fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s\n", line.Flag, line.ExpirationDate, line.RevocationDate, line.SerialNumber, line.Filename, line.DistinguishedName)
 			// case line.flag == "E":
 		}
