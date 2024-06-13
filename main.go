@@ -852,7 +852,7 @@ func (oAdmin *OvpnAdmin) getCcd(username string) Ccd {
 }
 
 func checkStaticAddressIsFree(staticAddress string, username string) bool {
-	o := runBash(fmt.Sprintf("grep -rl ' %[1]s ' %[2]s | grep -vx %[2]s/%[3]s | wc -l", staticAddress, *ccdDir, username))
+	o := runBash(fmt.Sprintf("grep -rl ' %[1]s ' %[2]s | grep -vx '%[2]s/%[3]s' | wc -l", staticAddress, *ccdDir, username))
 
 	if strings.TrimSpace(o) == "0" {
 		return true
@@ -983,12 +983,12 @@ func (oAdmin *OvpnAdmin) userCreate(username, password string) (bool, string) {
 			log.Error(err)
 		}
 	} else {
-		o := runBash(fmt.Sprintf("cd %s && %s build-client-full %s nopass 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
+		o := runBash(fmt.Sprintf("cd %s && %s build-client-full '%s' nopass 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
 		log.Debug(o)
 	}
 
 	if *authByPassword {
-		o := runBash(fmt.Sprintf("openvpn-user create --db.path %s --user %s --password %s", *authDatabase, username, password))
+		o := runBash(fmt.Sprintf("openvpn-user create --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
 		log.Debug(o)
 	}
 
@@ -1002,7 +1002,7 @@ func (oAdmin *OvpnAdmin) userCreate(username, password string) (bool, string) {
 func (oAdmin *OvpnAdmin) userChangePassword(username, password string) (error, string) {
 
 	if checkUserExist(username) {
-		o := runBash(fmt.Sprintf("openvpn-user check --db.path %[1]s --user %[2]s | grep %[2]s | wc -l", *authDatabase, username))
+		o := runBash(fmt.Sprintf("openvpn-user check --db.path %[1]s --user '%[2]s' | grep '%[2]s' | wc -l", *authDatabase, username))
 		log.Debug(o)
 
 		if err := validatePassword(password); err != nil {
@@ -1011,11 +1011,11 @@ func (oAdmin *OvpnAdmin) userChangePassword(username, password string) (error, s
 		}
 
 		if strings.TrimSpace(o) == "0" {
-			o = runBash(fmt.Sprintf("openvpn-user create --db.path %s --user %s --password %s", *authDatabase, username, password))
+			o = runBash(fmt.Sprintf("openvpn-user create --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
 			log.Debug(o)
 		}
 
-		o = runBash(fmt.Sprintf("openvpn-user change-password --db.path %s --user %s --password %s", *authDatabase, username, password))
+		o = runBash(fmt.Sprintf("openvpn-user change-password --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
 		log.Debug(o)
 
 		log.Infof("Password for user %s was changed", username)
@@ -1046,12 +1046,12 @@ func (oAdmin *OvpnAdmin) userRevoke(username string) (error, string) {
 				log.Error(err)
 			}
 		} else {
-			o := runBash(fmt.Sprintf("cd %[1]s && echo yes | %[2]s revoke %[3]s 1>/dev/null && %[2]s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
+			o := runBash(fmt.Sprintf("cd %[1]s && echo yes | %[2]s revoke '%[3]s' 1>/dev/null && %[2]s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
 			log.Debugln(o)
 		}
 
 		if *authByPassword {
-			o := runBash(fmt.Sprintf("openvpn-user revoke --db-path %s --user %s", *authDatabase, username))
+			o := runBash(fmt.Sprintf("openvpn-user revoke --db-path %s --user '%s'", *authDatabase, username))
 			log.Debug(o)
 		}
 
@@ -1113,7 +1113,7 @@ func (oAdmin *OvpnAdmin) userUnrevoke(username string) (error, string) {
 						_ = runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath))
 
 						if *authByPassword {
-							o := runBash(fmt.Sprintf("openvpn-user restore --db-path %s --user %s", *authDatabase, username))
+							o := runBash(fmt.Sprintf("openvpn-user restore --db-path %s --user '%s'", *authDatabase, username))
 							log.Debug(o)
 						}
 
@@ -1165,7 +1165,7 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 			}
 
 			if *authByPassword {
-				o := runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user %s", *authDatabase, username))
+				o := runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user '%s'", *authDatabase, username))
 				log.Debug(o)
 			}
 
@@ -1221,13 +1221,13 @@ func (oAdmin *OvpnAdmin) userDelete(username string) (error, string) {
 			uniqHash := strings.Replace(uuid.New().String(), "-", "", -1)
 			usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
 			for i := range usersFromIndexTxt {
-				if usersFromIndexTxt[i].DistinguishedName == "/CN="+username {
-					usersFromIndexTxt[i].DistinguishedName = "/CN=REVOKED-" + username + "-" + uniqHash
+				if usersFromIndexTxt[i].Identity == username {
+					usersFromIndexTxt[i].DistinguishedName = indexCNRegexp.ReplaceAllString(usersFromIndexTxt[i].DistinguishedName, "/CN=REVOKED-" + username + "-" + uniqHash)
 					break
 				}
 			}
 			if *authByPassword {
-				_ = runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user %s", *authDatabase, username))
+				_ = runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user '%s'", *authDatabase, username))
 			}
 			err := fWrite(*indexTxtPath, renderIndexTxt(usersFromIndexTxt))
 			if err != nil {
