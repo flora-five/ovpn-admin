@@ -78,6 +78,9 @@ var (
 	certsArchivePath = "/tmp/" + certsArchiveFileName
 	ccdArchivePath   = "/tmp/" + ccdArchiveFileName
 
+	// Extract CN from DN
+	indexCNRegexp    = regexp.MustCompile(`/?CN=([^/]+)`)
+
 	version = "2.0.0"
 )
 
@@ -635,12 +638,17 @@ func indexTxtParser(txt string) []indexTxtLine {
 	txtLinesArray := strings.Split(txt, "\n")
 
 	for _, v := range txtLinesArray {
-		str := strings.Fields(v)
+		str := strings.SplitN(v, "\t", 6)
 		if len(str) > 0 {
 			switch {
 			// case strings.HasPrefix(str[0], "E"):
 			case strings.HasPrefix(str[0], "R") || strings.HasPrefix(str[0], "V"):
-				indexTxt = append(indexTxt, indexTxtLine{Flag: str[0], ExpirationDate: str[1], RevocationDate: str[2], SerialNumber: str[3], Filename: str[4], DistinguishedName: str[5], Identity: str[5][strings.Index(str[5], "=")+1:]})
+				cnMatch := indexCNRegexp.FindStringSubmatch(str[5])
+				if len(cnMatch) < 2 {
+					log.Warnf("cannot extract CN from index line: %s", v)
+				} else {
+					indexTxt = append(indexTxt, indexTxtLine{Flag: str[0], ExpirationDate: str[1], RevocationDate: str[2], SerialNumber: str[3], Filename: str[4], DistinguishedName: str[5], Identity: cnMatch[1]})
+				}
 			}
 		}
 	}
@@ -879,7 +887,7 @@ func validatePassword(password string) error {
 
 func checkUserExist(username string) bool {
 	for _, u := range indexTxtParser(fRead(*indexTxtPath)) {
-		if u.DistinguishedName == ("/CN=" + username) {
+		if u.Identity == username {
 			return true
 		}
 	}
@@ -1083,7 +1091,7 @@ func (oAdmin *OvpnAdmin) userUnrevoke(username string) (error, string) {
 			// check certificate revoked flag 'R'
 			usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
 			for i := range usersFromIndexTxt {
-				if usersFromIndexTxt[i].DistinguishedName == "/CN="+username {
+				if usersFromIndexTxt[i].Identity == username {
 					if usersFromIndexTxt[i].Flag == "R" {
 
 						usersFromIndexTxt[i].Flag = "V"
@@ -1152,9 +1160,9 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 
 			usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
 			for i := range usersFromIndexTxt {
-				if usersFromIndexTxt[i].DistinguishedName == "/CN="+username {
+				if usersFromIndexTxt[i].Identity == username {
 					oldUserSerial = usersFromIndexTxt[i].SerialNumber
-					usersFromIndexTxt[i].DistinguishedName = "/CN=REVOKED-" + username + "-" + uniqHash
+					usersFromIndexTxt[i].DistinguishedName = indexCNRegexp.ReplaceAllString(usersFromIndexTxt[i].DistinguishedName, "/CN=REVOKED-" + username + "-" + uniqHash)
 					oldUserIndex = i
 					break
 				}
@@ -1174,7 +1182,7 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 				usersFromIndexTxt = indexTxtParser(fRead(*indexTxtPath))
 				for i := range usersFromIndexTxt {
 					if usersFromIndexTxt[i].SerialNumber == oldUserSerial {
-						usersFromIndexTxt[i].DistinguishedName = "/CN=" + username
+						usersFromIndexTxt[i].DistinguishedName = indexCNRegexp.ReplaceAllString(usersFromIndexTxt[i].DistinguishedName, "/CN=" + username)
 						break
 					}
 				}
@@ -1187,7 +1195,7 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 
 			usersFromIndexTxt = indexTxtParser(fRead(*indexTxtPath))
 			for i := range usersFromIndexTxt {
-				if usersFromIndexTxt[i].DistinguishedName == "/CN="+username {
+				if usersFromIndexTxt[i].Identity == username {
 					newUserIndex = i
 				}
 				if usersFromIndexTxt[i].SerialNumber == oldUserSerial {
