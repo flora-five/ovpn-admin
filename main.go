@@ -1190,7 +1190,7 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 				if err != nil {
 					log.Error(err)
 				}
-				return errors.New(fmt.Sprintf("error rotaing user due:  %s", userCreateMessage)), userCreateMessage
+				return errors.New(fmt.Sprintf("Error rotating user:  %s", userCreateMessage)), userCreateMessage
 			}
 
 			usersFromIndexTxt = indexTxtParser(fRead(*indexTxtPath))

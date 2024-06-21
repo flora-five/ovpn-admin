@@ -307,7 +307,7 @@ new Vue({
       return this.u.passwordChangeStatus == 200 ? "alert-success" : "alert-danger"
     },
     userRotateStatusCssClass: function () {
-      return this.u.roatateUserStatus == 200 ? "alert-success" : "alert-danger"
+      return this.u.rotateUserStatus == 200 ? "alert-success" : "alert-danger"
     },
     deleteUserStatusCssClass: function () {
       return this.u.deleteUserStatus == 200 ? "alert-success" : "alert-danger"
@@ -465,15 +465,15 @@ new Vue({
 
       axios.request(axios_cfg('api/user/rotate', data, 'form'))
         .then(function(response) {
-          _this.u.roatateUserStatus = 200;
+          _this.u.rotateUserStatus = 200;
           _this.u.newPassword = '';
           _this.getUserData();
           _this.u.modalRotateUserVisible = false;
           _this.$notify({title: 'Certificates for user ' + _this.username + ' rotated!', type: 'success'})
         })
         .catch(function(error) {
-          _this.u.roatateUserStatus = error.response.status;
-          _this.u.rotateUserMessage = error.response.data.message;
+          _this.u.rotateUserStatus = error.response.status;
+          _this.u.rotateUserMessage = error.response.data;
           _this.$notify({title: 'Rotate certificates for user ' + _this.username + ' failed!', type: 'error'})
         })
     },
@@ -495,7 +495,7 @@ new Vue({
         })
         .catch(function(error) {
           _this.u.deleteUserStatus = error.response.status;
-          _this.u.deleteUserMessage = error.response.data.message;
+          _this.u.deleteUserMessage = error.response.data;
           _this.$notify({title: 'Deleting user ' + _this.username + ' failed!', type: 'error'})
         })
     },
