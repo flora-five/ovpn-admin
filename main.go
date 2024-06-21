@@ -860,7 +860,11 @@ func (oAdmin *OvpnAdmin) getCcd(username string) Ccd {
 }
 
 func checkStaticAddressIsFree(staticAddress string, username string) bool {
-	o := runBash(fmt.Sprintf("grep -rl ' %[1]s ' %[2]s | grep -vx '%[2]s/%[3]s' | wc -l", staticAddress, *ccdDir, username))
+	err, o := runBash(fmt.Sprintf("grep -rl ' %[1]s ' %[2]s | grep -vx '%[2]s/%[3]s' | wc -l", staticAddress, *ccdDir, username))
+	if err != nil {
+		log.Warnf("checkStaticAddressIsFree command has failed: %s : %s", err, o)
+		return false
+	}
 
 	if strings.TrimSpace(o) == "0" {
 		return true
@@ -991,13 +995,21 @@ func (oAdmin *OvpnAdmin) userCreate(username, password string) (bool, string) {
 			log.Error(err)
 		}
 	} else {
-		o := runBash(fmt.Sprintf("cd %s && %s build-client-full '%s' nopass 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
-		log.Debug(o)
+		err, o := runBash(fmt.Sprintf("cd %s && %s build-client-full '%s' nopass 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
+		if err != nil {
+			log.Warnf("userCreate command 'easyrsa build-client-full' has failed: %s : %s", err, o)
+			ucErr = "Internal error"
+			return false, ucErr
+		}
 	}
 
 	if *authByPassword {
-		o := runBash(fmt.Sprintf("openvpn-user create --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
-		log.Debug(o)
+		err, o := runBash(fmt.Sprintf("openvpn-user create --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
+		if err != nil {
+			log.Warnf("userCreate command 'openvpn-user create' has failed: %s : %s", err, o)
+			ucErr = "Internal error"
+			return false, ucErr
+		}
 	}
 
 	log.Infof("Certificate for user %s issued", username)
@@ -1010,21 +1022,29 @@ func (oAdmin *OvpnAdmin) userCreate(username, password string) (bool, string) {
 func (oAdmin *OvpnAdmin) userChangePassword(username, password string) (error, string) {
 
 	if checkUserExist(username) {
-		o := runBash(fmt.Sprintf("openvpn-user check --db.path %[1]s --user '%[2]s' | grep '%[2]s' | wc -l", *authDatabase, username))
-		log.Debug(o)
+		err, o := runBash(fmt.Sprintf("openvpn-user check --db.path %[1]s --user '%[2]s' | grep '%[2]s' | wc -l", *authDatabase, username))
+		if err != nil {
+			log.Warnf("userChangePassword command 'openvpn-user check' has failed: %s : %s", err, o)
+		}
 
-		if err := validatePassword(password); err != nil {
+		if err = validatePassword(password); err != nil {
 			log.Warningf("userChangePassword: %s", err.Error())
 			return err, err.Error()
 		}
 
-		if strings.TrimSpace(o) == "0" {
-			o = runBash(fmt.Sprintf("openvpn-user create --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
-			log.Debug(o)
+		if err != nil || strings.TrimSpace(o) == "0" {
+			err, o = runBash(fmt.Sprintf("openvpn-user create --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
+			if err != nil {
+				log.Warnf("userChangePassword command 'openvpn-user create' has failed: %s : %s", err, o)
+				return err, err.Error()
+			}
 		}
 
-		o = runBash(fmt.Sprintf("openvpn-user change-password --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
-		log.Debug(o)
+		err, o = runBash(fmt.Sprintf("openvpn-user change-password --db.path %s --user '%s' --password '%s'", *authDatabase, username, password))
+		if err != nil {
+			log.Warnf("userChangePassword command 'openvpn-user change-password' has failed: %s : %s", err, o)
+			return err, err.Error()
+		}
 
 		log.Infof("Password for user %s was changed", username)
 
@@ -1054,13 +1074,17 @@ func (oAdmin *OvpnAdmin) userRevoke(username string) (error, string) {
 				log.Error(err)
 			}
 		} else {
-			o := runBash(fmt.Sprintf("cd %[1]s && echo yes | %[2]s revoke '%[3]s' 1>/dev/null && %[2]s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
-			log.Debugln(o)
+			err, o := runBash(fmt.Sprintf("cd %[1]s && echo yes | %[2]s revoke '%[3]s' 1>/dev/null && %[2]s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
+			if err != nil {
+				log.Errorf("userRevoke command 'easyrsa revoke' has failed: %s : %s", err, o)
+			}
 		}
 
 		if *authByPassword {
-			o := runBash(fmt.Sprintf("openvpn-user revoke --db-path %s --user '%s'", *authDatabase, username))
-			log.Debug(o)
+			err, o := runBash(fmt.Sprintf("openvpn-user revoke --db-path %s --user '%s'", *authDatabase, username))
+			if err != nil {
+				log.Errorf("userRevoke command 'openvpn-user revoke' has failed: %s : %s", err, o)
+			}
 		}
 
 		crlFix()
@@ -1118,11 +1142,16 @@ func (oAdmin *OvpnAdmin) userUnrevoke(username string) (error, string) {
 							log.Error(err)
 						}
 
-						_ = runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath))
+						err, o := runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath))
+						if err != nil {
+							log.Warnf("userUnrevoke command 'easyrsa gen-crl' has failed: %s : %s", err, o)
+						}
 
 						if *authByPassword {
-							o := runBash(fmt.Sprintf("openvpn-user restore --db-path %s --user '%s'", *authDatabase, username))
-							log.Debug(o)
+							err, o = runBash(fmt.Sprintf("openvpn-user restore --db-path %s --user '%s'", *authDatabase, username))
+							if err != nil {
+								log.Warnf("userUnrevoke command 'openvpn-user restore' has failed: %s : %s", err, o)
+							}
 						}
 
 						crlFix()
@@ -1173,8 +1202,10 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 			}
 
 			if *authByPassword {
-				o := runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user '%s'", *authDatabase, username))
-				log.Debug(o)
+				err, o := runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user '%s'", *authDatabase, username))
+				if err != nil {
+					log.Warnf("userRotate command 'openvpn-user delete' has failed: %s : %s", err, o)
+				}
 			}
 
 			userCreated, userCreateMessage := oAdmin.userCreate(username, newPassword)
@@ -1209,7 +1240,10 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 				log.Error(err)
 			}
 
-			_ = runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath))
+			err, o := runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath))
+			if err != nil {
+				log.Warnf("userRotate command 'easyrsa gen-crl' has failed: %s : %s", err, o)
+			}
 		}
 		crlFix()
 		oAdmin.clients = oAdmin.usersList()
@@ -1235,13 +1269,19 @@ func (oAdmin *OvpnAdmin) userDelete(username string) (error, string) {
 				}
 			}
 			if *authByPassword {
-				_ = runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user '%s'", *authDatabase, username))
+				err, o := runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user '%s'", *authDatabase, username))
+				if err != nil {
+					log.Warnf("userDelete command 'openvpn-user delete' has failed: %s : %s", err, o)
+				}
 			}
 			err := fWrite(*indexTxtPath, renderIndexTxt(usersFromIndexTxt))
 			if err != nil {
 				log.Error(err)
 			}
-			_ = runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null ", *easyrsaDirPath, *easyrsaBinPath))
+			err, o := runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null ", *easyrsaDirPath, *easyrsaBinPath))
+			if err != nil {
+				log.Warnf("userDelete command 'easyrsa gen-crl' has failed: %s : %s", err, o)
+			}
 		}
 		crlFix()
 		oAdmin.clients = oAdmin.usersList()
