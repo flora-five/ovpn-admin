@@ -915,12 +915,22 @@ func (oAdmin *OvpnAdmin) usersList() []OpenvpnClient {
 			ovpnClient := OpenvpnClient{Identity: line.Identity, ExpirationDate: parseDateToString(indexTxtDateLayout, line.ExpirationDate, stringDateFormat)}
 			switch {
 			case line.Flag == "V":
-				ovpnClient.AccountStatus = "Active"
-				validCerts += 1
+				if (parseDateToUnix(indexTxtDateLayout, line.ExpirationDate) - apochNow) < 0 {
+					ovpnClient.AccountStatus = "Expired"
+					expiredCerts += 1
+				} else {
+					ovpnClient.AccountStatus = "Active"
+					validCerts += 1
+				}
 			case line.Flag == "R":
-				ovpnClient.AccountStatus = "Revoked"
-				ovpnClient.RevocationDate = parseDateToString(indexTxtDateLayout, line.RevocationDate, stringDateFormat)
-				revokedCerts += 1
+				if (parseDateToUnix(indexTxtDateLayout, line.ExpirationDate) - apochNow) < 0 {
+					ovpnClient.AccountStatus = "Expired"
+					expiredCerts += 1
+				} else {
+					ovpnClient.AccountStatus = "Revoked"
+					ovpnClient.RevocationDate = parseDateToString(indexTxtDateLayout, line.RevocationDate, stringDateFormat)
+					revokedCerts += 1
+				}
 			case line.Flag == "E":
 				ovpnClient.AccountStatus = "Expired"
 				expiredCerts += 1
@@ -928,9 +938,6 @@ func (oAdmin *OvpnAdmin) usersList() []OpenvpnClient {
 
 			ovpnClientCertificateExpire.WithLabelValues(line.Identity).Set(float64((parseDateToUnix(indexTxtDateLayout, line.ExpirationDate) - apochNow) / 3600 / 24))
 
-			if (parseDateToUnix(indexTxtDateLayout, line.ExpirationDate) - apochNow) < 0 {
-				ovpnClient.AccountStatus = "Expired"
-			}
 			ovpnClient.Connections = 0
 
 			userConnected, userConnectedTo := isUserConnected(line.Identity, oAdmin.activeClients)
