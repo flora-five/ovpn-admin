@@ -14,7 +14,7 @@
     :row-style-class="rowStyleClassFn"
     :search-options="{ enabled: true}" >
     <div slot="table-actions">
-      <button type="button" class="btn btn-sm btn-success el-square" v-show="serverRole == 'master'" v-on:click.stop="u.modalNewUserVisible=true">Add user</button>
+      <button type="button" class="btn btn-sm btn-success el-square" v-show="serverRole == 'master'" v-on:click.stop="u.newUserCreateError='';u.modalNewUserVisible=true">Add user</button>
       <b-badget class="btn btn-sm btn-info el-square" v-if="serverRole == 'slave'">Slave - last sync: {{ lastSync }}</b-badget>
       <button type="button" class="btn btn-sm btn-secondary el-square" v-on:click.stop="filters.hideRevoked=!filters.hideRevoked;this.$cookies.set('hideRevoked',!(this.$cookies.get('hideRevoked') == 'true'), -1);">{{ revokeFilterText }}</button>
     </div>
