@@ -238,6 +238,9 @@ new Vue({
       .then(function(response) {
         _this.getUserData();
         _this.$notify({title: 'User ' + _this.username + ' unrevoked!', type: 'success'})
+      })
+      .catch(function(error) {
+        _this.$notify({title: 'User ' + _this.username + ' unrevoke failed: ' + error.response.data, type: 'error'})
       });
     })
     _this.$root.$on('u-rotate', function () {

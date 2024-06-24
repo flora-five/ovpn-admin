@@ -1119,6 +1119,10 @@ func (oAdmin *OvpnAdmin) userUnrevoke(username string) (error, string) {
 				log.Error(err)
 			}
 		} else {
+			if checkFileExists(fmt.Sprintf("%s/pki/issued/%s.crt", *easyrsaDirPath, username)) || checkFileExists(fmt.Sprintf("%s/pki/private/%s.key", *easyrsaDirPath, username)) || checkFileExists(fmt.Sprintf("%s/pki/reqs/%s.req", *easyrsaDirPath, username)) {
+				return errors.New(fmt.Sprintf("user \"%s\" already has a valid certificate", username)), fmt.Sprintf("{\"msg\":\"User \"%s\" already has a valid certificate\"}", username)
+			}
+
 			// check certificate revoked flag 'R'
 			usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
 			for i := range usersFromIndexTxt {
@@ -1659,6 +1663,11 @@ func getOvpnCaCertExpireDate() time.Time {
 	}
 
 	return cert.NotAfter
+}
+
+func checkFileExists(filePath string) bool {
+	_, error := os.Stat(filePath)
+	return !errors.Is(error, os.ErrNotExist)
 }
 
 // https://community.openvpn.net/openvpn/ticket/623
