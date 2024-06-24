@@ -42,6 +42,8 @@ const (
 	stringDateFormat     = "2006-01-02 15:04:05"
 	downloadCertsApiUrl  = "api/data/certs/download"
 	downloadCcdApiUrl    = "api/data/ccd/download"
+	// Rotate functionality enabled two weeks before expiration
+	canRotateBefore      = 86400 * 14
 
 	kubeNamespaceFilePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
@@ -211,6 +213,7 @@ type OpenvpnClient struct {
 	Identity         string `json:"Identity"`
 	AccountStatus    string `json:"AccountStatus"`
 	ExpirationDate   string `json:"ExpirationDate"`
+	CanRotate        bool   `json:"CanRotate"`
 	RevocationDate   string `json:"RevocationDate"`
 	ConnectionStatus string `json:"ConnectionStatus"`
 	Connections      int    `json:"Connections"`
@@ -921,6 +924,9 @@ func (oAdmin *OvpnAdmin) usersList() []OpenvpnClient {
 				} else {
 					ovpnClient.AccountStatus = "Active"
 					validCerts += 1
+					if (parseDateToUnix(indexTxtDateLayout, line.ExpirationDate) - apochNow - canRotateBefore) < 0 {
+						ovpnClient.CanRotate = true
+					}
 				}
 			case line.Flag == "R":
 				if (parseDateToUnix(indexTxtDateLayout, line.ExpirationDate) - apochNow) < 0 {

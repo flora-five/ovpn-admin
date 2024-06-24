@@ -35,7 +35,7 @@
           @click.left.stop="rowActionFn"
           v-for="action in actions"
           v-bind:class="action.class"
-          v-if="action.showWhenStatus == props.row.AccountStatus && action.showForServerRole.includes(serverRole) && action.showForModule.some(p=> modulesEnabled.includes(p))">
+          v-if="action.showWhenStatus == props.row.AccountStatus && action.showForServerRole.includes(serverRole) && action.showForModule.some(p=> modulesEnabled.includes(p)) && (!('showIfBoolProperty' in action && action.showIfBoolProperty in props.row) || props.row[action.showIfBoolProperty])">
           {{ action.label }}
         </button>
       </span>
