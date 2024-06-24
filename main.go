@@ -1188,26 +1188,6 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 				log.Error(err)
 			}
 		} else {
-
-			var oldUserIndex, newUserIndex int
-			var oldUserSerial string
-
-			uniqHash := strings.Replace(uuid.New().String(), "-", "", -1)
-
-			usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
-			for i := range usersFromIndexTxt {
-				if usersFromIndexTxt[i].Identity == username {
-					oldUserSerial = usersFromIndexTxt[i].SerialNumber
-					usersFromIndexTxt[i].DistinguishedName = indexCNRegexp.ReplaceAllString(usersFromIndexTxt[i].DistinguishedName, "/CN=REVOKED-" + username + "-" + uniqHash)
-					oldUserIndex = i
-					break
-				}
-			}
-			err := fWrite(*indexTxtPath, renderIndexTxt(usersFromIndexTxt))
-			if err != nil {
-				log.Error(err)
-			}
-
 			if *authByPassword {
 				err, o := runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user '%s'", *authDatabase, username))
 				if err != nil {
@@ -1215,19 +1195,34 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 				}
 			}
 
+			err, o := runBash(fmt.Sprintf("cd %[1]s && echo yes | %[2]s revoke '%[3]s' 1>/dev/null && %[2]s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
+			if err != nil {
+				log.Errorf("userRotate command 'easyrsa revoke' has failed: %s : %s", err, o)
+			}
+			err, o = runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath))
+			if err != nil {
+				log.Warnf("userRotate command 'easyrsa gen-crl' has failed: %s : %s", err, o)
+			}
+
+			var oldUserIndex, newUserIndex int
+			var oldUserSerial string
+
+			usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
+			for i := range usersFromIndexTxt {
+				if usersFromIndexTxt[i].Identity == username && usersFromIndexTxt[i].Flag == "R" {
+					usersFromIndexTxt[i].DistinguishedName = indexCNRegexp.ReplaceAllString(usersFromIndexTxt[i].DistinguishedName, "/CN=REVOKED-" + username + "-" + strings.Replace(uuid.New().String(), "-", "", -1))
+					oldUserIndex = i
+					oldUserSerial = usersFromIndexTxt[i].SerialNumber
+					break
+				}
+			}
+			err = fWrite(*indexTxtPath, renderIndexTxt(usersFromIndexTxt))
+			if err != nil {
+				log.Error(err)
+			}
+
 			userCreated, userCreateMessage := oAdmin.userCreate(username, newPassword)
 			if !userCreated {
-				usersFromIndexTxt = indexTxtParser(fRead(*indexTxtPath))
-				for i := range usersFromIndexTxt {
-					if usersFromIndexTxt[i].SerialNumber == oldUserSerial {
-						usersFromIndexTxt[i].DistinguishedName = indexCNRegexp.ReplaceAllString(usersFromIndexTxt[i].DistinguishedName, "/CN=" + username)
-						break
-					}
-				}
-				err = fWrite(*indexTxtPath, renderIndexTxt(usersFromIndexTxt))
-				if err != nil {
-					log.Error(err)
-				}
 				return errors.New(fmt.Sprintf("Error rotating user:  %s", userCreateMessage)), userCreateMessage
 			}
 
@@ -1247,10 +1242,6 @@ func (oAdmin *OvpnAdmin) userRotate(username, newPassword string) (error, string
 				log.Error(err)
 			}
 
-			err, o := runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath))
-			if err != nil {
-				log.Warnf("userRotate command 'easyrsa gen-crl' has failed: %s : %s", err, o)
-			}
 		}
 		crlFix()
 		oAdmin.clients = oAdmin.usersList()
@@ -1267,27 +1258,31 @@ func (oAdmin *OvpnAdmin) userDelete(username string) (error, string) {
 				log.Error(err)
 			}
 		} else {
-			uniqHash := strings.Replace(uuid.New().String(), "-", "", -1)
-			usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
-			for i := range usersFromIndexTxt {
-				if usersFromIndexTxt[i].Identity == username {
-					usersFromIndexTxt[i].DistinguishedName = indexCNRegexp.ReplaceAllString(usersFromIndexTxt[i].DistinguishedName, "/CN=REVOKED-" + username + "-" + uniqHash)
-					break
-				}
-			}
 			if *authByPassword {
 				err, o := runBash(fmt.Sprintf("openvpn-user delete --force --db.path %s --user '%s'", *authDatabase, username))
 				if err != nil {
 					log.Warnf("userDelete command 'openvpn-user delete' has failed: %s : %s", err, o)
 				}
 			}
-			err := fWrite(*indexTxtPath, renderIndexTxt(usersFromIndexTxt))
+			err, o := runBash(fmt.Sprintf("cd %[1]s && echo yes | %[2]s revoke '%[3]s' 1>/dev/null && %[2]s gen-crl 1>/dev/null", *easyrsaDirPath, *easyrsaBinPath, username))
 			if err != nil {
-				log.Error(err)
+				log.Errorf("userDelete command 'easyrsa revoke' has failed: %s : %s", err, o)
 			}
-			err, o := runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null ", *easyrsaDirPath, *easyrsaBinPath))
+			err, o = runBash(fmt.Sprintf("cd %s && %s gen-crl 1>/dev/null ", *easyrsaDirPath, *easyrsaBinPath))
 			if err != nil {
 				log.Warnf("userDelete command 'easyrsa gen-crl' has failed: %s : %s", err, o)
+			}
+
+			usersFromIndexTxt := indexTxtParser(fRead(*indexTxtPath))
+			for i := range usersFromIndexTxt {
+				if usersFromIndexTxt[i].Identity == username && usersFromIndexTxt[i].Flag == "R" {
+					usersFromIndexTxt[i].DistinguishedName = indexCNRegexp.ReplaceAllString(usersFromIndexTxt[i].DistinguishedName, "/CN=REVOKED-" + username + "-" + strings.Replace(uuid.New().String(), "-", "", -1))
+					break
+				}
+			}
+			err = fWrite(*indexTxtPath, renderIndexTxt(usersFromIndexTxt))
+			if err != nil {
+				log.Error(err)
 			}
 		}
 		crlFix()
